@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>数当てゲーム - ハイスコア＆ラッキー演出</title>
+    <!-- 📄 PWA用のマニフェストファイルを読み込み -->
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
@@ -11,7 +12,7 @@
             font-family: 'Helvetica Neue', Arial, sans-serif;
             text-align: center;
             background-color: #f0f2f5;
-            padding: 50px;
+            padding: 20px 10px; /* スマホ向けに上下の余白を調整 */
             transition: background-color 0.5s ease;
         }
         body.game-over-bg { background-color: #2a2a2a; }
@@ -32,14 +33,17 @@
         }
         .shake-animation { animation: shake 0.5s; }
 
+        /* 🛠️ 中央配置のために修正したコンテナ */
         .container {
             background: white;
             padding: 30px;
             border-radius: 10px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            display: inline-block;
+            display: block;          /* blockに変更 */
             max-width: 400px;
-            width: 100%;
+            width: 90%;              /* スマホ画面の90%の幅にする */
+            margin: 0 auto;          /* 左右自動中央寄せ */
+            box-sizing: border-box;  /* 横幅の計算をはみ出さないように固定 */
             transition: all 0.5s ease;
         }
         .container.lucky-container {
@@ -322,7 +326,6 @@
         messageElement.innerHTML += `<br><button class="mode-btn restart-btn" onclick="location.reload()">次のゲームへ</button>`;
     }
 
-    // ⚙️ PWA Service Workerの登録処理を追加
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('./sw.js')
           .then(() => console.log('PWA Service Worker 登録成功！'))
