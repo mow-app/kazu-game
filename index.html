@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数当てゲーム - ハイスコア＆ラッキー演出</title>
+    <link rel="manifest" href="manifest.json">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f2f5;
+            padding: 50px;
+            transition: background-color 0.5s ease;
+        }
+        body.game-over-bg { background-color: #2a2a2a; }
+        body.lucky-bg { background-color: #fff4cc; }
+
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(0px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(2px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(2px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(0deg); }
+        }
+        .shake-animation { animation: shake 0.5s; }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: inline-block;
+            max-width: 400px;
+            width: 100%;
+            transition: all 0.5s ease;
+        }
+        .container.lucky-container {
+            border: 3px solid #ffd700;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
+        }
+
+        .score-board {
+            background: #e9ecef;
+            padding: 8px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #495057;
+        }
+
+        .mode-btn {
+            padding: 10px 15px; font-size: 16px; margin: 5px; border: none; border-radius: 5px;
+            cursor: pointer; color: white; font-weight: bold;
+        }
+        .btn-easy { background-color: #28a745; }
+        .btn-normal { background-color: #ffc107; color: #333; }
+        .btn-hard { background-color: #dc3545; }
+        
+        #gameArea { display: none; }
+        
+        .cat-image-container {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            margin: 15px 0;
+        }
+        #cat-face {
+            width: 180px;
+            height: 180px;
+            object-fit: contain;
+            transition: transform 0.3s ease;
+        }
+        .bounce-animation {
+            animation: bounce 0.6s infinite alternate;
+        }
+        @keyframes bounce {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-15px); }
+        }
+
+        .hearts-container { font-size: 24px; margin: 15px 0; letter-spacing: 5px; }
+        .heart-red { color: #ff4d4d; transition: color 0.3s; }
+        .heart-black { color: #ccc; transition: color 0.3s; }
+        
+        input { padding: 10px; font-size: 16px; width: 80px; text-align: center; margin-right: 10px; }
+        .action-btn {
+            padding: 10px 20px; font-size: 16px; background-color: #007bff; color: white;
+            border: none; border-radius: 5px; cursor: pointer;
+        }
+        .action-btn:hover { background-color: #0056b3; }
+        .action-btn:disabled { background-color: #cccccc; cursor: not-allowed; }
+        
+        #message { margin-top: 20px; font-size: 18px; font-weight: bold; line-height: 1.5; }
+        
+        .history-container {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            font-size: 14px;
+            color: #6c757d;
+            border: 1px dashed #dee2e6;
+        }
+        .history-badge {
+            display: inline-block;
+            background-color: #e9ecef;
+            color: #495057;
+            padding: 2px 8px;
+            margin: 2px;
+            border-radius: 12px;
+            font-weight: bold;
+        }
+
+        .restart-btn { margin-top: 15px; background-color: #6c757d; }
+    </style>
+</head>
+<body>
+
+<div class="container" id="gameContainer">
+    <div class="score-board">
+        🔥 現在の連勝: <span id="currentStreak">0</span> | 👑 最高連勝記録: <span id="highStreak">0</span>
+    </div>
+
+    <h2>🔢 激レア演出搭載！数当てゲーム</h2>
+    
+    <div class="cat-image-container">
+        <img id="cat-face" src="start.png" alt="助手猫">
+    </div>
+    
+    <div id="setupArea">
+        <p>難易度を選んでね！</p>
+        <button class="mode-btn btn-easy" onclick="startGame('easy')">かんたん (1〜50 / 💗6)</button>
+        <button class="mode-btn btn-normal" onclick="startGame('normal')">ふつう (1〜100 / 💗6)</button>
+        <button class="mode-btn btn-hard" onclick="startGame('hard')">むずかしい (1〜200 / 💗6)</button>
+    </div>
+    
+    <div id="gameArea">
+        <p id="gameDescription"></p>
+        <div class="hearts-container" id="heartsArea"></div>
+        
+        <input type="number" id="guessInput">
+        <button class="action-btn" id="submitBtn" onclick="checkGuess()">予想する</button>
+        <div id="message"></div>
+        
+        <div class="history-container" id="historyArea" style="display: none;">
+            🤔 これまでの予想: <span id="historyList"></span>
+        </div>
+    </div>
+</div>
+
+<script>
+    let answer = 0;
+    let maxLives = 6;
+    let currentLives = maxLives;
+    let maxNumber = 100;
+    let guessHistory = [];
+
+    let currentStreak = parseInt(sessionStorage.getItem("currentStreak")) || 0;
+    let highStreak = parseInt(localStorage.getItem("highStreak")) || 0;
+
+    document.getElementById("currentStreak").innerText = currentStreak;
+    document.getElementById("highStreak").innerText = highStreak;
+
+    function updateCatFace(state) {
+        const cat = document.getElementById("cat-face");
+        cat.classList.remove("bounce-animation");
+        
+        if (state === 'start') cat.src = "start.png";
+        else if (state === 'panic') cat.src = "panic.png";
+        else if (state === 'gameover') cat.src = "gameover.png";
+        else if (state === 'clear') {
+            cat.src = "clear.png";
+            cat.classList.add("bounce-animation");
+        }
+    }
+
+    function startGame(mode) {
+        if (mode === 'easy') { maxNumber = 50; } 
+        else if (mode === 'normal') { maxNumber = 100; } 
+        else if (mode === 'hard') { maxNumber = 200; }
+
+        currentLives = maxLives;
+        answer = Math.floor(Math.random() * maxNumber) + 1;
+        guessHistory = [];
+
+        document.getElementById("setupArea").style.display = "none";
+        document.getElementById("gameArea").style.display = "block";
+        document.getElementById("historyArea").style.display = "none";
+        document.getElementById("historyList").innerHTML = "";
+        
+        document.getElementById("gameDescription").innerText = `1 から ${maxNumber} までの数字を当ててね！`;
+        const inputElement = document.getElementById("guessInput");
+        inputElement.min = 1;
+        inputElement.max = maxNumber;
+        inputElement.placeholder = `1〜${maxNumber}`;
+
+        updateHearts();
+        updateCatFace('start');
+    }
+
+    function checkGuess() {
+        const inputElement = document.getElementById("guessInput");
+        const messageElement = document.getElementById("message");
+        const containerElement = document.getElementById("gameContainer");
+        const userGuess = parseInt(inputElement.value);
+
+        if (isNaN(userGuess) || userGuess < 1 || userGuess > maxNumber) {
+            messageElement.innerText = `1〜${maxNumber} の数字を入力してね！`;
+            return;
+        }
+
+        if (userGuess === answer) {
+            currentStreak++;
+            sessionStorage.setItem("currentStreak", currentStreak);
+            
+            if (currentStreak > highStreak) {
+                highStreak = currentStreak;
+                localStorage.setItem("highStreak", highStreak);
+            }
+
+            document.getElementById("currentStreak").innerText = currentStreak;
+            document.getElementById("highStreak").innerText = highStreak;
+
+            const isLucky = (answer === 7 || (answer % 11 === 0 && answer < 100) || answer === 111 || answer === 222);
+
+            updateCatFace('clear');
+
+            if (isLucky) {
+                messageElement.innerHTML = `✨👑 奇跡！ラッキーナンバー「${answer}」で正解！ 👑✨<br>現在の連勝: ${currentStreak}連勝！`;
+                messageElement.style.color = "#b58900";
+                
+                document.body.classList.add("lucky-bg");
+                containerElement.classList.add("lucky-container");
+
+                let duration = 3 * 1000;
+                let end = Date.now() + duration;
+
+                (function frame() {
+                    confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 } });
+                    confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 } });
+                    if (Date.now() < end) { requestAnimationFrame(frame); }
+                }());
+            } else {
+                messageElement.innerHTML = `🎉 正解！おめでとう！<br>${currentStreak}連勝中！ (残りのライフ: ${currentLives})`;
+                messageElement.style.color = "green";
+                
+                confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+                setTimeout(() => confetti({ particleCount: 100, spread: 100, origin: { y: 0.6 } }), 200);
+            }
+
+            endGame();
+            return;
+        }
+
+        currentLives--;
+        updateHearts();
+
+        guessHistory.push(userGuess);
+        document.getElementById("historyArea").style.display = "block";
+        
+        let historyHtml = "";
+        guessHistory.forEach(num => {
+            historyHtml += `<span class="history-badge">${num}</span>`;
+        });
+        document.getElementById("historyList").innerHTML = historyHtml;
+
+        if (currentLives <= 0) {
+            currentStreak = 0;
+            sessionStorage.setItem("currentStreak", currentStreak);
+            document.getElementById("currentStreak").innerText = currentStreak;
+
+            messageElement.innerHTML = `💀 ゲームオーバー！<br>正解は「 ${answer} 」でした。`;
+            messageElement.style.color = "white";
+            
+            containerElement.classList.add("shake-animation");
+            document.body.classList.add("game-over-bg");
+            containerElement.style.backgroundColor = "#555";
+            containerElement.style.color = "white";
+
+            updateCatFace('gameover');
+
+            endGame();
+            return;
+        }
+
+        updateCatFace('panic');
+
+        if (userGuess > answer) {
+            messageElement.innerText = "📉 もっと小さい数字だよ！";
+            messageElement.style.color = "blue";
+        } else {
+            messageElement.innerText = "📈 もっと大きい数字だよ！";
+            messageElement.style.color = "red";
+        }
+
+        inputElement.value = "";
+    }
+
+    function updateHearts() {
+        const heartsArea = document.getElementById("heartsArea");
+        let heartsHtml = "";
+        for (let i = 0; i < maxLives; i++) {
+            if (i < currentLives) { heartsHtml += '<span class="heart-red">♥</span>'; } 
+            else { heartsHtml += '<span class="heart-black">♥</span>'; }
+        }
+        heartsArea.innerHTML = heartsHtml;
+    }
+
+    function endGame() {
+        document.getElementById("guessInput").disabled = true;
+        document.getElementById("submitBtn").disabled = true;
+        const messageElement = document.getElementById("message");
+        messageElement.innerHTML += `<br><button class="mode-btn restart-btn" onclick="location.reload()">次のゲームへ</button>`;
+    }
+
+    // ⚙️ PWA Service Workerの登録処理を追加
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js')
+          .then(() => console.log('PWA Service Worker 登録成功！'))
+          .catch((err) => console.error('PWA 登録失敗:', err));
+    }
+</script>
+
+</body>
+</html>
